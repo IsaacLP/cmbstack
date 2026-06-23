@@ -2,7 +2,7 @@ import numpy as np
 import healpy as hp
 
 
-def dl_to_cl(ell, dl):
+def dl_to_cl(ell, dl,lmax):
     """Convert D_ell = ell(ell+1) C_ell / (2 pi) to C_ell.
 
     Parameters
@@ -55,8 +55,10 @@ def load_cl(path):
         C_ell array indexed from ell=0, suitable for passing to
         :func:`simulate_map`.
     """
-    ell, dl = np.loadtxt(path,usecols=(0,1))
-    cl = dl_to_cl(ell,dl)
+    ell, dl = np.loadtxt(path,usecols=(0,1),unpack=True)
+    ell = ell.astype(int)
+    lmax = ell.max()  
+    cl = dl_to_cl(ell,dl,lmax)
 
     return cl
 
