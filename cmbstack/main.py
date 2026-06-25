@@ -1,6 +1,18 @@
-import numpy as np
+"""High-level stacking pipeline for HEALPix CMB maps.
 
-import maps, stacking
+:class:`StackingPipeline` orchestrates the full analysis in one place:
+simulate (or load) a map, detect peaks, extract gnomonic patches, stack them,
+and compute a radial profile. The pipeline stores every intermediate product
+as an attribute so individual steps can be inspected after the run.
+
+Typical use
+-----------
+>>> pipeline = StackingPipeline.from_cl("path/to/cl.txt", nside=1024, seed=42)
+>>> pipeline.run()
+>>> plt.imshow(pipeline.stacked)
+"""
+
+from . import maps, stacking
 
 
 class StackingPipeline:
@@ -26,18 +38,18 @@ class StackingPipeline:
         self.map = sky_map
         self.nside = nside
         self.normalized = None
-        self.peaks = None
+        self.positions = None
         self.patches = None
         self.stacked = None
+        self.radius = None
+        self.profile = None
 
 
     @classmethod
     def from_cl(cls, cl_path, nside=128, seed=None):
         """Build a pipeline by simulating a map from a power-spectrum file."""
-        # Function 1
         cl = maps.load_cl(cl_path)
 
-        # Function 2
         sky_map = maps.simulate_map(cl, nside, seed)
         return cls(sky_map, nside)
     
@@ -57,32 +69,15 @@ class StackingPipeline:
         result : cmbstack.stack.StackResult
         """
 
-        # Function 3
         self.normalized = maps.normalize_map(self.map)
         
-        # Function 4
-        self.peaks = stacking.find_hottest_spots(self.normalized)
+        self.positions = stacking.find_peaks(self.normalized,self.nside,threshold=3)
 
-        # Function 5
-        self.patches = stacking.cut_circles_around_spots(self.normalized,self.peaks,self.nside)
+        self.patches = stacking.extract_patches(self.normalized,self.positions,size_deg=size_deg,reso_arcmin=reso_arcmin)
 
-        # Function 6
-        self.stacked = stacking.average_all_circles(self.patches)
+        self.stacked = stacking.stack_patches(self.patches)
+
+        if profile:
+            self.radius, self.profile = stacking.radial_profile(self.stacked,reso_arcmin=reso_arcmin)
 
         return self
-
-
-pipeline = StackingPipeline.from_cl('/Users/isaac/Documents/cmbstack/data/base_plikHM_TTTEEE_lowl_lowE_lensing.minimum.theory_cl', 1024, 42)
-pipeline.run()
-
-import matplotlib.pyplot as plt
-
-plt.figure(figsize=(6, 5))
-plt.hist(pipeline.stacked, bins=30, edgecolor='black', color='skyblue')
-plt.title("The Stacked Peak! (Average temperature of all hot spots)")
-plt.xlabel("Temperature value (normalized)")
-plt.ylabel("Number of pixels")
-plt.grid(True, alpha=0.3)
-plt.show()
-
-print("Check the pop-up window for your plot. Success!")
