@@ -1,3 +1,16 @@
+"""Map simulation and preprocessing utilities for HEALPix CMB maps.
+
+Provides the building blocks for turning a raw power spectrum into a
+normalised HEALPix map ready for stacking:
+
+  1. :func:`load_cl`      — read a D_ell spectrum file and convert to C_ell
+  2. :func:`simulate_map` — draw a Gaussian random realisation with ``healpy.synfast``
+  3. :func:`normalize_map`— subtract the monopole and divide by the std
+
+These functions are intentionally field-agnostic: they work on any scalar
+power spectrum (temperature TT, lensing convergence, y-map, ...).
+"""
+
 import numpy as np
 import healpy as hp
 
@@ -112,3 +125,13 @@ def normalize_map(m, remove_monopole=True):
     """
     m_norm = hp.remove_monopole(m) / m.std()
     return m_norm
+
+
+def load_map(path, field=0):
+    """Wraps ``hp.read_map``"""
+    return hp.read_map(path, field=field)
+ 
+ 
+def save_map(path, sky_map, overwrite=True):
+    """Wraps ``hp.write_map``"""
+    hp.write_map(path, sky_map, overwrite=overwrite)
