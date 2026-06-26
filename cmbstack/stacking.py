@@ -1,109 +1,198 @@
-import healpy as hp
+"""Stacking of patches around positions on a HEALPix map.
+
+The pipeline is field-agnostic: it operates on any scalar HEALPix map (CMB
+temperature, lensing convergence, a y-map, galaxy density, ...). Positions to
+stack on can either be auto-detected peaks (local maxima) or supplied as an
+external catalogue, so the same code serves peak stacking and
+stacking-on-catalogue (clusters, voids, filaments, ...).
+
+Typical use
+-----------
+>>> peaks = find_peaks(m, nside, threshold=3.0)      # positions in (theta, phi)
+>>> patches = extract_patches(m, peaks)              # fixed-grid 2D cutouts
+>>> stacked = stack_patches(patches)                 # mean 2D image
+>>> r, profile = radial_profile(stacked, reso_arcmin=3.0)
+"""
+
 import numpy as np
-
-# FUNCTION 4: Find the hottest spots (peaks) - Detecting the Hottest Local Maxima
-
-#We utilize Healpy's `hotspots` algorithm to identify local maxima. 
-#A pixel is considered a local maximum if its temperature value is strictly greater than all its immediate neighboring pixels in the HEALPix grid.
-
-#Once all maxima are found, we rank them by their normalized temperature $T_{\text{norm}}$. We select the top $N=100$ hottest spots:
-#\[
-#\text{Peak Set} = \{ \hat{n}_p \in \text{Maxima} \mid T_{\text{norm}}(\hat{n}_p) \text{ is in the top } N \}
-#\]
-#We focus on the hottest peaks because they represent the most significant structures in the Gaussian field and yield the highest signal-to-noise ratio in the final stack.
+import healpy as hp
 
 
-def find_hottest_spots(cleaned_sky_map, number_of_peaks_to_find=100):
+# ---------------------------------------------------------------------------
+# Position finding
+# ---------------------------------------------------------------------------
+def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
+    """Find local maxima of a HEALPix map and return their sky positions.
+
+    A pixel is a local maximum if its value is strictly greater than all of its
+    immediate HEALPix neighbours. Peaks can be filtered by a significance
+    threshold and/or capped at the ``n_peaks`` highest.
+
+    Parameters
+    ----------
+    sky_map : numpy.ndarray
+        Input HEALPix map (RING ordering). For a normalised map, values are in
+        units of sigma, so ``threshold`` is a significance nu.
+    nside : int
+        HEALPix resolution parameter of ``sky_map``.
+    threshold : float, optional
+        If given, keep only peaks with value greater than this (e.g. 3.0 for
+        3-sigma peaks on a normalised map). Default None (no threshold).
+    n_peaks : int, optional
+        If given, keep only the ``n_peaks`` highest peaks (applied after the
+        threshold). Default None (keep all).
+
+    Returns
+    -------
+    positions : numpy.ndarray, shape (N, 2)
+        Sky positions of the selected peaks as ``(theta, phi)`` in radians, the
+        same format accepted by :func:`extract_patches`.
     """
-    Finds all the local hot spots, picks the brightest ones, 
-    and returns their pixel locations.
+    # hp.hotspots returns (max_map, minima_pix, maxima_pix); we want the maxima.
+    _, _, maxima_pix = hp.hotspots(sky_map)
+    maxima_pix = np.asarray(maxima_pix)
+
+    values = sky_map[maxima_pix]
+
+    if threshold is not None: # Add check for minimmun threshold/n_peaks and ratio between threshold and n_peaks
+        keep = values > threshold
+        maxima_pix = maxima_pix[keep]
+        values = values[keep]
+
+    # Sort highest-first so n_peaks keeps the most significant.
+    order = np.argsort(values)[::-1]
+    maxima_pix = maxima_pix[order]
+
+    if n_peaks is not None:
+        maxima_pix = maxima_pix[:n_peaks]
+
+    theta, phi = hp.pix2ang(nside, maxima_pix)
+    return np.column_stack([theta, phi])
+
+
+# ---------------------------------------------------------------------------
+# Patch extraction
+# ---------------------------------------------------------------------------
+def extract_patches(sky_map, positions, size_deg=10.0, reso_arcmin=3.0):
+    """Extract fixed-grid gnomonic patches centred on each position.
+
+    Each patch is a square 2D array produced by a gnomonic (tangent-plane)
+    projection centred on the position, so every patch shares the same grid and
+    the centre pixel always corresponds to the position itself. 
+
+    Parameters
+    ----------
+    sky_map : numpy.ndarray
+        Input HEALPix map (RING ordering). Any scalar field.
+    positions : array_like, shape (N, 2)
+        Sky positions as ``(theta, phi)`` in radians (e.g. the output of
+        :func:`find_peaks`, or an external catalogue converted to this format).
+    size_deg : float, optional
+        Full side length of the square patch in degrees. Default 10.0.
+    reso_arcmin : float, optional
+        Pixel size of the projected patch in arcminutes. Default 3.0.
+
+    Returns
+    -------
+    patches : list of numpy.ndarray
+        One square 2D array per position, all of identical shape
+        ``(xsize, xsize)`` with ``xsize = size_deg * 60 / reso_arcmin``.
     """
+    positions = np.atleast_2d(positions)
+    xsize = int(round(size_deg * 60.0 / reso_arcmin))
 
-    # This finds every single hot spot on the map
-    everything, cold_pixels, all_hot_pixels = hp.hotspots(cleaned_sky_map)
-    
-    # Check the temperature at each hot spot
-    temperatures_at_hot_spots = cleaned_sky_map[all_hot_pixels]
-    
-    # Sort them so the hottest comes first
-    order_from_hottest_to_coldest = np.argsort(temperatures_at_hot_spots)[::-1]
-    
-    # Keep only the top ones (e.g., top 100)
-    hottest_peak_pixels = all_hot_pixels[order_from_hottest_to_coldest][:number_of_peaks_to_find]
-    
-    return hottest_peak_pixels
+    patches = []
+    for theta, phi in positions:
+        # gnomview's rot expects (lon, lat) in degrees.
+        lon = np.degrees(phi)
+        lat = 90.0 - np.degrees(theta)
+        patch = hp.gnomview(
+            sky_map,
+            rot=(lon, lat),
+            xsize=xsize,
+            reso=reso_arcmin,
+            return_projected_map=True,
+            no_plot=True,
+        )
+        patches.append(np.asarray(patch))
 
-#-------------------------------------------------------------------------------------
-# FUNCTION 5: Cut out little circles around those spots - Extracting Patches (Cutting Circles Around Peaks)
-
-#For each selected peak located at direction vector $\hat{n}_p$, we define a circular aperture (patch) with a fixed angular radius $\Theta = 5^\circ$. 
-
-#To extract the patch, we find every pixel direction $\hat{n}$ on the sphere that falls within this radius. The angular distance $\Delta \theta$ between the peak center and a given pixel is computed via the dot product:
-#\[
-#\Delta \theta = \arccos\left( \hat{n}_p \cdot \hat{n} \right)
-#\]
-#We include all pixels satisfying $\Delta \theta \leq \Theta$. This gives us a set of temperature values $T_{\text{norm}}(\hat{n})$ surrounding each peak. Conceptually, we are recentering these patches so that the peak lies exactly at the origin of our local coordinate system.
+    return patches
 
 
-def cut_circles_around_spots(cleaned_sky_map, hottest_peak_pixels, sky_resolution, circle_size_in_degrees=5):
+# ---------------------------------------------------------------------------
+# Stacking
+# ---------------------------------------------------------------------------
+def stack_patches(patches):
+    """Average patches pixel-by-pixel into a single stacked image.
+
+    Because every patch shares the same fixed grid (see :func:`extract_patches`),
+    the mean is a genuine stacked image: incoherent noise averages towards zero
+    while the coherent central profile survives. NaN/UNSEEN pixels (patch edges
+    that fall off the map near the poles) are ignored.
+
+    Parameters
+    ----------
+    patches : sequence of numpy.ndarray
+        Patches of identical shape, e.g. the output of :func:`extract_patches`.
+
+    Returns
+    -------
+    stacked : numpy.ndarray
+        The mean 2D patch. Display with ``plt.imshow(stacked)``.
     """
-    For each hot spot, draws a circle (like a cookie cutter) 
-    and saves all the temperatures inside that circle.
+    stack = np.array(patches, dtype=float)
+    mean_stacked = np.nanmean(stack, axis=0)
+    return mean_stacked
+
+
+# ---------------------------------------------------------------------------
+# Profile characterisation
+# ---------------------------------------------------------------------------
+def radial_profile(stacked, reso_arcmin=3.0, n_bins=None):
+    """Azimuthally average a stacked patch into a 1D radial profile.
+
+    Collapses the 2D stacked image to value-versus-radius by averaging in
+    concentric annuli about the centre. This 1D profile is the characterisation
+    of the mean peak: a central maximum, and (for CMB temperature) a faint
+    acoustic ring further out.
+
+    Parameters
+    ----------
+    stacked : numpy.ndarray
+        Square 2D stacked patch from :func:`stack_patches`.
+    reso_arcmin : float, optional
+        Pixel size in arcminutes, so the returned radius is in physical angular
+        units. Default 3.0.
+    n_bins : int, optional
+        Number of radial bins. Default is half the patch side length.
+
+    Returns
+    -------
+    radius_arcmin : numpy.ndarray
+        Bin-centre radii in arcminutes.
+    profile : numpy.ndarray
+        Mean value in each annulus.
     """
+    ny, nx = stacked.shape
+    cy, cx = (ny - 1) / 2.0, (nx - 1) / 2.0
 
-    # Convert degrees to radians (because Healpy speaks radians)
-    circle_size_in_radians = np.radians(circle_size_in_degrees)
-    
-    all_circles = []  # This will hold all the little cut-out circles
-    
-    # Loop through each hot spot
-    for pixel_location in hottest_peak_pixels:
-        # Get the latitude and longitude of this spot
-        latitude, longitude = hp.pix2ang(sky_resolution, pixel_location)
-        
-        # Convert that to a 3D direction arrow (x,y,z)
-        center_direction_vector = hp.ang2vec(latitude, longitude)
-        
-        # Find all the pixel-numbers that fall inside this circle
-        pixels_in_circle = hp.query_disc(sky_resolution, center_direction_vector, circle_size_in_radians, inclusive=True)
-        
-        # Get the actual temperature values at those pixels
-        temperatures_in_circle = cleaned_sky_map[pixels_in_circle]
-        
-        # Save this circle to our list
-        all_circles.append(temperatures_in_circle)
-    
-    return all_circles
+    y, x = np.indices(stacked.shape)
+    r_pix = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
 
-#------------------------------------------------------------------------------
-# FUNCTION 6: Average all those circles together - STACKING - Averaging the Patches)
+    if n_bins is None:
+        n_bins = nx // 2
 
-#This is the core of our project. To construct the mean stacked peak map, we average the extracted patches pixel-by-pixel. For $N$ peaks, the stacked radial profile is defined as:
-#\[
-#S(\Delta \theta) = \frac{1}{N} \sum_{i=1}^{N} T_{\text{norm}}^{(i)}(\Delta \theta)
-#\]
-#where $i$ indexes the selected peaks. 
+    r_max = nx // 2
+    bin_edges = np.linspace(0, r_max, n_bins + 1)
+    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
-#By averaging over many independent patches, random fluctuations and noise (which are uncorrelated) average down towards zero, while the coherent, symmetric profile of a typical CMB hot spot remains. This final average gives us the characteristic "peak shape" of the CMB temperature anisotropies.
+    profile = np.full(n_bins, np.nan)
+    flat_r = r_pix.ravel()
+    flat_v = stacked.ravel()
+    for i in range(n_bins):
+        in_bin = (flat_r >= bin_edges[i]) & (flat_r < bin_edges[i + 1])
+        if np.any(in_bin):
+            profile[i] = np.nanmean(flat_v[in_bin])
 
-def average_all_circles(all_circles):
-    """
-    Takes all the circles, makes them the exact same size, 
-    and averages them pixel-by-pixel to create ONE "stacked" circle.
-    """
-
-    # Find the smallest circle (just to make sure they all fit together)
-    smallest_circle_size = min(len(circle) for circle in all_circles)
-    
-    # Trim every circle to that exact size
-    circles_same_size = [circle[:smallest_circle_size] for circle in all_circles]
-    
-    # Turn the list into a table (rows = circles, columns = pixels)
-    table_of_circles = np.array(circles_same_size)
-    
-    # Average down the rows (axis=0 means "average each column across all rows")
-    average_circle = np.mean(table_of_circles, axis=0)
-    
-    return average_circle
-
-#-------------------------------------------------------------------
+    radius_arcmin = bin_centres * reso_arcmin
+    return radius_arcmin, profile

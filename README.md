@@ -2,137 +2,152 @@
 
 ## Overview
 
-This repository contains our Python implementation for stacking patches of the Cosmic Microwave Background (CMB) temperature sky. Our goal is to take a theoretical power spectrum, generate a synthetic sky map, locate the hottest local maxima (peaks), and average the surrounding patches. This averaging process, known as "stacking," enhances the symmetric signal of the typical peak profile while suppressing random noise and cosmic variance.
+`cmbstack` is a Python package for stacking patches of the Cosmic Microwave Background (CMB) temperature sky. It accepts input as a theoretical power spectrum, a [HEALPix](https://healpy.readthedocs.io/en/latest/index.html) FITS file, or a map array already in memory. From there it detects local maxima, extracts gnomonic (flat-sky) patches around each peak, and averages them. This stacking procedure enhances the coherent peak profile while suppressing uncorrelated noise.
 
-Below, we document the mathematical reasoning behind each of our six core functions.
+## Installation
 
-## Dependencies
+```bash
+pip install -e .
+```
 
-- `healpy` — handles the round sky maps
-- `numpy` — handles numbers and math
-- `matplotlib` — draws pictures
+## Quick Start
 
-## Summary of Workflow
+**From a power spectrum file:**
+```python
+from cmbstack.main import StackingPipeline
 
-1. **Input:** Theoretical $D_\ell$ spectrum.
-2. **Convert:** Change $D_\ell$ to $C_\ell$.
-3. **Simulate:** Generate a random Gaussian CMB sky map.
-4. **Standardize:** Remove the mean and normalize by $\sigma$.
-5. **Identify:** Find and rank the local maxima.
-6. **Extract:** Cut out $5^\circ$ discs around the top 100 peaks.
-7. **Average:** Stack the patches to reveal the universal peak profile.
+pipeline = StackingPipeline.from_cl("path/to/spectrum.dat", nside=1024, seed=42)
+pipeline.run()
+```
 
----
+**From an existing FITS map:**
+```python
+pipeline = StackingPipeline.from_fits("path/to/map.fits", field=0)
+pipeline.run()
+```
 
-## Functions
+**From a map array already in memory:**
+```python
+pipeline = StackingPipeline.from_map(sky_map)
+pipeline.run()
+```
 
-### 1. Reading the Power Spectrum (Converting $D_\ell$ to $C_\ell$)
+See `examples/from_theoretical_cl.ipynb` for a full worked example.
 
-**Function:** `read_power_spectrum_from_file`
+## Package Structure
 
-The data provided by our supervisors contains the power spectrum in the form of $D_\ell^{TT}$, defined as:
+```
+cmbstack/
+├── maps.py      — power-spectrum loading, map simulation, normalisation
+├── stacking.py  — peak finding, patch extraction, stacking, radial profile
+└── main.py      — StackingPipeline high-level class
+```
+
+## Workflow
+
+> **Note:** Steps 1–2 apply when starting from a power spectrum. Use `StackingPipeline.from_fits` or `from_map` to skip them when working with a real or pre-simulated map.
+
+### 1. Load the Power Spectrum — `maps.load_cl`
+
+The input file contains the power spectrum as $D_\ell^{TT}$:
 
 $$D_\ell \equiv \frac{\ell(\ell+1)}{2\pi} C_\ell$$
 
-However, the Healpy library expects the angular power spectrum $C_\ell$ as input for generating maps. Therefore, we rearrange the formula to convert our data:
+`load_cl` reads columns $(\ell, D_\ell)$ and converts to $C_\ell$:
 
-$$C_\ell = \frac{2\pi}{\ell(\ell+1)} D_\ell$$
-
-We set $C_0 = 0$ to avoid the division-by-zero singularity at $\ell=0$, as the monopole contributes no fluctuating signal.
-
-**Implementation notes:**
-- Opens the file, skipping the first line (which has the `#` and headers).
-- Column 0: the scale of the bumps.
-- Column 1: the Temperature power values (TT) — the only column we use.
-- Converts using: `Cl = Dl * 2 * pi / (l * (l + 1))`.
-- Sets the first value to 0 to avoid division-by-zero.
+$$C_\ell = \frac{2\pi}{\ell(\ell+1)} D_\ell, \qquad C_0 = C_1 = 0$$
 
 ---
 
-### 2. Generating the Synthetic CMB Map
+### 2. Simulate a Sky Map — `maps.simulate_map`
 
-**Function:** `create_fake_sky_map`
+A Gaussian random realization is drawn by sampling spherical harmonic coefficients $a_{\ell m}$ with variance $C_\ell$:
 
-We generate a random, Gaussian-distributed realization of the CMB sky. Healpy achieves this by drawing spherical harmonic coefficients $a_{\ell m}$ from a Gaussian distribution with variance $C_\ell$, formally defined as:
+$$T(\hat{n}) = \sum_{\ell,m} a_{\ell m} \, Y_{\ell m}(\hat{n}), \qquad \langle |a_{\ell m}|^2 \rangle = C_\ell$$
 
-$$\langle |a_{\ell m}|^2 \rangle = C_\ell$$
-
-The temperature at any point on the sphere $\hat{n}$ is then computed via the spherical harmonic transform:
-
-$$T(\hat{n}) = \sum_{\ell=0}^{\ell_{\text{max}}} \sum_{m=-\ell}^{\ell} a_{\ell m} \, Y_{\ell m}(\hat{n})$$
-
-where $Y_{\ell m}$ are the spherical harmonic functions. The `synfast` routine performs this exact computation to produce our mock sky map. `sky_resolution=128` gives a decent quality picture.
+This calls `healpy.synfast` internally. An optional `seed` makes runs reproducible.
 
 ---
 
-### 3. Preprocessing the Map (Removing Monopole & Normalizing)
+### 3. Normalise the Map — `maps.normalize_map`
 
-**Function:** `remove_average_and_scale_map`
+Before peak detection, the map is standardised so that thresholds have a clear statistical meaning:
 
-Before searching for peaks, we must standardize our map to ensure the detection threshold is uniform. First, we remove the monopole (the average temperature) from the map:
+$$T_{\text{norm}}(\hat{n}) = \frac{T(\hat{n}) - \langle T \rangle}{\sigma}$$
 
-$$T_{\text{fluctuation}}(\hat{n}) = T(\hat{n}) - \langle T \rangle$$
-
-Next, we divide by the standard deviation $\sigma$ to make the map dimensionless and unit-variant:
-
-$$T_{\text{norm}}(\hat{n}) = \frac{T_{\text{fluctuation}}(\hat{n})}{\sigma}$$
-
-where $\sigma = \sqrt{\langle (T - \langle T \rangle)^2 \rangle}$. After this step, our map has a mean of zero and a standard deviation of one, meaning peaks are measured in units of "sigma" above the average.
+After this step the map has mean $\approx 0$ and standard deviation $= 1$, so peaks are measured in units of $\sigma$.
 
 ---
 
-### 4. Detecting the Hottest Local Maxima
+### 4. Detect Peaks — `stacking.find_peaks`
 
-**Function:** `find_hottest_spots`
+Local maxima are identified with `healpy.hotspots`: a pixel is a maximum if its value exceeds every immediate HEALPix neighbour. Peaks are filtered by a significance threshold $\nu$ (default $\nu = 3\sigma$) and optionally capped at the $N$ highest:
 
-We utilize Healpy's `hotspots` algorithm to identify local maxima. A pixel is considered a local maximum if its temperature value is strictly greater than all its immediate neighboring pixels in the HEALPix grid.
+$$\text{Peaks} = \{\hat{n}_p \in \text{Maxima} \mid T_{\text{norm}}(\hat{n}_p) > \nu\}$$
 
-Once all maxima are found, we rank them by their normalized temperature $T_{\text{norm}}$. We select the top $N=100$ hottest spots:
-
-$$\text{Peak Set} = \{ \hat{n}_p \in \text{Maxima} \mid T_{\text{norm}}(\hat{n}_p) \text{ is in the top } N \}$$
-
-We focus on the hottest peaks because they represent the most significant structures in the Gaussian field and yield the highest signal-to-noise ratio in the final stack.
-
-**Implementation notes:**
-- Finds every local hot spot on the map.
-- Checks the temperature at each hot spot.
-- Sorts from hottest to coldest.
-- Keeps only the top N (default: 100).
+Returns sky positions as $(θ, φ)$ pairs in radians.
 
 ---
 
-### 5. Extracting Patches (Cutting Circles Around Peaks)
+### 5. Extract Patches — `stacking.extract_patches`
 
-**Function:** `cut_circles_around_spots`
-
-For each selected peak located at direction vector $\hat{n}_p$, we define a circular aperture (patch) with a fixed angular radius $\Theta = 5^\circ$.
-
-To extract the patch, we find every pixel direction $\hat{n}$ on the sphere that falls within this radius. The angular distance $\Delta \theta$ between the peak center and a given pixel is computed via the dot product:
-
-$$\Delta \theta = \arccos\left( \hat{n}_p \cdot \hat{n} \right)$$
-
-We include all pixels satisfying $\Delta \theta \leq \Theta$. This gives us a set of temperature values $T_{\text{norm}}(\hat{n})$ surrounding each peak. Conceptually, we are recentering these patches so that the peak lies exactly at the origin of our local coordinate system.
-
-**Implementation notes:**
-- Converts degrees to radians (Healpy uses radians internally).
-- For each hot spot: gets the latitude/longitude, converts to a 3D direction vector (x, y, z), finds all pixels inside the disc, and saves their temperatures.
+For each peak a square patch is cut using a gnomonic (tangent-plane) projection centred on $\hat{n}_p$. Every patch shares the same fixed pixel grid (side length `size_deg`, pixel scale `reso_arcmin`), so the centre pixel always corresponds to the peak itself and patches can be co-added directly.
 
 ---
 
-### 6. Stacking (Averaging the Patches)
+### 6. Stack — `stacking.stack_patches`
 
-**Function:** `average_all_circles`
+Patches are averaged pixel-by-pixel:
 
-This is the core of our project. To construct the mean stacked peak map, we average the extracted patches pixel-by-pixel. For $N$ peaks, the stacked radial profile is defined as:
+$$S = \frac{1}{N} \sum_{i=1}^{N} P_i$$
 
-$$S(\Delta \theta) = \frac{1}{N} \sum_{i=1}^{N} T_{\text{norm}}^{(i)}(\Delta \theta)$$
+Incoherent noise averages towards zero; the coherent central profile survives.
 
-where $i$ indexes the selected peaks.
+---
 
-By averaging over many independent patches, random fluctuations and noise (which are uncorrelated) average down towards zero, while the coherent, symmetric profile of a typical CMB hot spot remains. This final average gives us the characteristic "peak shape" of the CMB temperature anisotropies.
+### 7. Radial Profile — `stacking.radial_profile`
 
-**Implementation notes:**
-- Finds the smallest circle size to ensure all patches align correctly.
-- Trims every circle to that exact size.
-- Arranges patches into a 2D array (rows = circles, columns = pixels).
-- Averages down the columns (`axis=0`) to produce the final stacked result.
+The 2D stacked image is collapsed to a 1D profile by azimuthal averaging in concentric annuli about the centre. Returns bin-centre radii in arcminutes and the mean temperature in each annulus.
+
+---
+
+## Pipeline Constructors
+
+`StackingPipeline` provides three entry points depending on where your data comes from:
+
+| Constructor | Input | Notes |
+|---|---|---|
+| `from_cl(path, nside, seed)` | Power-spectrum file | Simulates a Gaussian random map via `healpy.synfast` |
+| `from_fits(path, field=0)` | HEALPix FITS file | Loads the map with `maps.load_map`; `nside` is inferred automatically |
+| `from_map(sky_map)` | NumPy array | Accepts any in-memory HEALPix map; `nside` is inferred automatically |
+
+All three store the map in `pipeline.map` and share the same `run()` interface.
+
+---
+
+## Map I/O Utilities
+
+`maps.load_map` and `maps.save_map` wrap the healpy FITS readers for convenience:
+
+```python
+from cmbstack import maps
+
+m = maps.load_map("map.fits", field=0)   # wraps hp.read_map
+maps.save_map("out.fits", m)             # wraps hp.write_map (overwrite=True by default)
+```
+
+---
+
+## Pipeline Object
+
+`StackingPipeline` stores every intermediate product as an attribute:
+
+| Attribute | Content |
+|---|---|
+| `pipeline.map` | Raw simulated map |
+| `pipeline.normalized` | Normalised map (units of $\sigma$) |
+| `pipeline.positions` | Peak positions $(θ, φ)$ in radians |
+| `pipeline.patches` | List of 2D gnomonic patches |
+| `pipeline.stacked` | Mean stacked 2D image |
+| `pipeline.radius` | Radial bin centres (arcmin) |
+| `pipeline.profile` | Mean temperature per radial bin |
