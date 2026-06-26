@@ -1,2 +1,7 @@
 .vscode
 **__pycache__
+
+# Sphinx documentation webpage building output local caches :
+docs/_build/
+_build/
+
