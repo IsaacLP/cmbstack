@@ -5,9 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cmbstack"
 version = "0.0.1"
-
-dependencies = [
-  "numpy",
-  "healpy",
-  "matplotlib",
+description = "Stack patches of the CMB temperature sky around local maxima"
+readme = "README.md"
+authors = [
+    {name = "Isaac Alexis López Paredes", email = "first@example.com"},
+    {name = "Anushka Sanjay Tilekar", email = "anushka.tilekar.23@alumni.ucl.ac.uk"},
 ]
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "healpy",
+    "matplotlib",
+]
+
+[project.urls]
+Homepage = "https://github.com/IsaacLP/cmbstack"
+Repository = "https://github.com/IsaacLP/cmbstack.git"
+
+[tool.setuptools.packages.find]
+include = ["cmbstack*"]
+exclude = ["data*", "tests*", "docs*", "examples*", "_*", "_build", "_static", "_templates"]
+
