@@ -1,6 +1,6 @@
 """High-level stacking pipeline for HEALPix CMB maps.
 
-:class:`StackingPipeline` orchestrates the full analysis in one place:
+:class:`StackingPipeline` runs the full analysis in one place:
 simulate (or load) a map, detect peaks, extract gnomonic patches, stack them,
 and compute a radial profile. The pipeline stores every intermediate product
 as an attribute so individual steps can be inspected after the run.
@@ -70,7 +70,7 @@ class StackingPipeline:
         return cls.from_map(sky_map)
     
 
-    def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True):
+    def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None):
         """Run the full stacking loop.
 
         Parameters
@@ -79,6 +79,10 @@ class StackingPipeline:
             Patch geometry.
         profile : bool
             Whether to also compute the radial profile.
+        threshold : float
+            Peak-finding threshold in units of the map std.
+        n_peaks : int or None
+            Maximum number of peaks to use; None means use all.
 
         Returns
         -------
@@ -86,8 +90,8 @@ class StackingPipeline:
         """
 
         self.normalized = maps.normalize_map(self.map)
-        
-        self.positions = stacking.find_peaks(self.normalized,self.nside,threshold=3)
+
+        self.positions = stacking.find_peaks(self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks)
 
         self.patches = stacking.extract_patches(self.normalized,self.positions,size_deg=size_deg,reso_arcmin=reso_arcmin)
 
