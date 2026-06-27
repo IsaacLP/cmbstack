@@ -1,5 +1,3 @@
 numpy
 healpy
 matplotlib
-sphinx
-sphinx-rtd-theme
