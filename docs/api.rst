@@ -1,19 +1,26 @@
 API Reference
 =============
 
-..automodule:: cmbstack
-    :members:
-    :undoc-members:
-    :show-inheritance:
+cmbstack.main
+-------------
 
-.. This tells Sphinx to automatically document all functions and classes in our cmbstack module.
+.. automodule:: cmbstack.main
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
+cmbstack.maps
+-------------
 
-.. #---------------------------------------------------
-.. (NOTE:
-.. This is a comment explaining what this page does.)
-.. Comments in .rst files (.ReStructured Text files) are written with 2 dots ".." followed by a space ".. " and then your comment ".. [commeent]" .)
-.. And comments in .rst files must be written on their own seperate line.
-.. )
+.. automodule:: cmbstack.maps
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
+cmbstack.stacking
+-----------------
 
+.. automodule:: cmbstack.stacking
+   :members:
+   :undoc-members:
+   :show-inheritance:

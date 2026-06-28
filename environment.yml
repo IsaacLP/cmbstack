@@ -1,6 +1,0 @@
-name: cmbstack
-channels:
-  - conda-forge
-  - defaults
-dependencies:
-  - healpy

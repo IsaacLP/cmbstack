@@ -5,3 +5,9 @@
 docs/_build/
 _build/
 
+# Distribution / packaging
+*.egg-info/
+dist/
+
+# Heavy files
+**.fits
