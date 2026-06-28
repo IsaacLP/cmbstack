@@ -37,7 +37,10 @@ extensions = [
     'sphinx.ext.napoleon',   # This extensoin allows us to use Google style docstrings
     'sphinx.ext.mathjax',    # This extension renders the mathematical equations - because we have used a lot of mathematical equations in this repository, haha!
     'sphinx.ext.viewcode',   # This extension will add links to our source code on Github
+    'nbsphinx',              # Renders Jupyter notebooks as documentation pages
 ]
+
+nbsphinx_execute = 'never'  # use stored cell outputs; don't re-run on RTD
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -47,7 +50,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-#html_theme = 'alabaster'
-# Trying a different looking ReadTheDocs theme instead of the default 'alabaster' taught in lecture
+
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']

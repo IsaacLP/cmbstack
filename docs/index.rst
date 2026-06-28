@@ -1,55 +1,15 @@
-.. cmbstack documentation master file, created by
-   sphinx-quickstart on Fri Jun 26 00:23:37 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-"cmbstack" documentation:
-===========================
-
-Welcome to cmbstack's documentation! 
+cmbstack 
 ====================================
 
-This **cmbstack** is a package built with Python programming language, for stacking the Cosmic microwave Background (CMB) maps around local maxima.
+cmbstack is a Python package for stacking patches of the Cosmic Microwave Background (CMB) temperature sky. It accepts as input a theoretical power spectrum, a `HEALPix <https://healpy.readthedocs.io/en/latest/index.html>`_ FITS file, or a map array already in memory. From there it detects local maxima, extracts gnomonic (flat-sky) patches around each peak, and averages them. This stacking procedure enhances the coherent peak profile while suppressing uncorrelated noise.
 
-
-Installation Procedure:
------------------------
-
-Option-[1]: 
-Install the latest version from PyPI:
-
-.. code-block:: bash
-
-   pip install cmbstack
-
-Or 
-
-Option-[2]:
-Install the development version from GitHub:
-
-.. code-block:: bash
-
-   git clone https://github.com/IsaacLP/cmbstack.git
-   cd cmbstack
-   pip install -e .
-
-
-Quick Start Method:
--------------------
-
-.. code-block:: python
-
-   import cmbstack as cs
-   # Your code here
-
-For more detailed usage, please see the API Reference section below.
-
-
+For a full worked example, see the Tutorial page below or download the jupyter notebook version and the files required to run it `here <https://github.com/IsaacLP/cmbstack/tree/main/docs/tutorials>`_.
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: User guide
 
-   api 
-
+   installation
+   Tutorial <tutorials/tutorial>
+   api
