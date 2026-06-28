@@ -1,8 +1,8 @@
 Metadata-Version: 2.4
 Name: cmbstack
-Version: 0.0.1
+Version: 0.0.3
 Summary: Stack patches of the CMB temperature sky around local maxima
-Author-email: Isaac Alexis López Paredes <first@example.com>, Anushka Sanjay Tilekar <anushka.tilekar.23@alumni.ucl.ac.uk>
+Author-email: Isaac Alexis López Paredes <isaacalexis.lopezparedes@students.uniroma2.eu>, Anushka Sanjay Tilekar <anushka.tilekar.23@alumni.ucl.ac.uk>
 License-Expression: MIT
 Project-URL: Homepage, https://github.com/IsaacLP/cmbstack
 Project-URL: Repository, https://github.com/IsaacLP/cmbstack.git
@@ -14,11 +14,13 @@ Requires-Dist: numpy
 Requires-Dist: healpy
 Requires-Dist: matplotlib
 
-[![A rectangular badge, half black half purple containing the text made at Code Astro](https://img.shields.io/badge/Made%20at-Code/Astro-blueviolet.svg)](https://semaphorep.github.io/codeastro/)
+[![Made at Code/Astro](https://img.shields.io/badge/Made%20at-Code/Astro-blueviolet.svg)](https://semaphorep.github.io/codeastro/)
+[![PyPI version](https://img.shields.io/pypi/v/cmbstack.svg)](https://pypi.org/project/cmbstack/)
+[![Python version](https://img.shields.io/pypi/pyversions/cmbstack.svg)](https://pypi.org/project/cmbstack/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Development Status](https://img.shields.io/badge/Status-In_Development-brightgreen.svg)
 
-# CMB Peak Stacking Pipeline
-
-## Overview
+# cmbstack
 
 `cmbstack` is a Python package for stacking patches of the Cosmic Microwave Background (CMB) temperature sky. It accepts input as a theoretical power spectrum, a [HEALPix](https://healpy.readthedocs.io/en/latest/index.html) FITS file, or a map array already in memory. From there it detects local maxima, extracts gnomonic (flat-sky) patches around each peak, and averages them. This stacking procedure enhances the coherent peak profile while suppressing uncorrelated noise.
 

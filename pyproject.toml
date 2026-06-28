@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cmbstack"
-version = "0.0.1"
+version = "0.0.3"
 description = "Stack patches of the CMB temperature sky around local maxima"
 readme = "README.md"
 authors = [
-    {name = "Isaac Alexis López Paredes", email = "first@example.com"},
+    {name = "Isaac Alexis López Paredes", email = "isaacalexis.lopezparedes@students.uniroma2.eu"},
     {name = "Anushka Sanjay Tilekar", email = "anushka.tilekar.23@alumni.ucl.ac.uk"},
 ]
 license = "MIT"

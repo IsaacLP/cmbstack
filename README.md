@@ -1,4 +1,8 @@
-[![A rectangular badge, half black half purple containing the text made at Code Astro](https://img.shields.io/badge/Made%20at-Code/Astro-blueviolet.svg)](https://semaphorep.github.io/codeastro/)
+[![Made at Code/Astro](https://img.shields.io/badge/Made%20at-Code/Astro-blueviolet.svg)](https://semaphorep.github.io/codeastro/)
+[![PyPI version](https://img.shields.io/pypi/v/cmbstack.svg)](https://pypi.org/project/cmbstack/)
+[![Python version](https://img.shields.io/pypi/pyversions/cmbstack.svg)](https://pypi.org/project/cmbstack/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Development Status](https://img.shields.io/badge/Status-In_Development-brightgreen.svg)
 
 # cmbstack
 
