@@ -31,17 +31,17 @@ pip install -e .
 from cmbstack.main import StackingPipeline
 
 pipeline = StackingPipeline.from_cl("path/to/spectrum.cl", nside=1024, seed=42)
-StackedResult = pipeline.run()
+stacked_result = pipeline.run()
 ```
 
 **From an existing FITS map:**
 ```python
 pipeline = StackingPipeline.from_fits("path/to/map.fits", field=0)
-StackedResult = pipeline.run()
+stacked_result = pipeline.run()
 ```
 
 **From a map array already in memory:**
 ```python
 pipeline = StackingPipeline.from_map(sky_map)
-StackedResult = pipeline.run()
+stacked_result = pipeline.run()
 ```
