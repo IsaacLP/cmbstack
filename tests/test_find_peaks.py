@@ -1,8 +1,5 @@
-import sys
 import numpy as np
 import healpy as hp
-
-sys.path.append("..")
 
 from cmbstack.stacking import find_peaks
 from cmbstack.maps import normalize_map

@@ -1,10 +1,7 @@
-import sys
 import healpy as hp
 import numpy as np
 from pathlib import Path
 import tempfile
-
-sys.path.append("..")
 
 from cmbstack import StackingPipeline, maps
 
