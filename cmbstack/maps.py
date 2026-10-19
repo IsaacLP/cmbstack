@@ -131,8 +131,11 @@ def normalize_map(m):
     m_norm : numpy.ndarray
         The normalized map, with mean ~0 and std ~1.
     """
-    m_clean = hp.remove_monopole(m)
-    m_norm = m_clean / m_clean.std()
+    m = np.asarray(m, dtype=float)
+    good = np.isfinite(m) & (m != hp.UNSEEN)
+    m_norm = np.full_like(m, hp.UNSEEN)
+    m_good = m[good] - m[good].mean()
+    m_norm[good] = m_good / m_good.std()
     return m_norm
 
 
