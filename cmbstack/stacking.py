@@ -45,7 +45,7 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
     Returns
     -------
     positions : numpy.ndarray, shape (N, 2)
-        Sky positions of the selected peaks as ``(theta, phi)`` in radians, the
+        Sky positions of the selected peaks as ``(lon, lat)`` in degrees, the
         same format accepted by :func:`extract_patches`.
     """
     # hp.hotspots returns (max_map, minima_pix, maxima_pix); we want the maxima.
@@ -66,8 +66,8 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
     if n_peaks is not None:
         maxima_pix = maxima_pix[:n_peaks]
 
-    theta, phi = hp.pix2ang(nside, maxima_pix)
-    return np.column_stack([theta, phi])
+    lon, lat = hp.pix2ang(nside, maxima_pix,lonlat=True)
+    return np.column_stack([lon, lat])
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     sky_map : numpy.ndarray
         Input HEALPix map (RING ordering). Any scalar field.
     positions : array_like, shape (N, 2)
-        Sky positions as ``(theta, phi)`` in radians (e.g. the output of
+        Sky positions as ``(lon, lat)`` in degrees (e.g. the output of
         :func:`find_peaks`, or an external catalogue converted to this format).
     psi : array_like, shape (N,), optional
         Rotation angle in degrees for each patch, passed to ``gnomview``'s
@@ -115,10 +115,8 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     patches = []
     if psi is None:
         psi = np.zeros(len(positions))
-    for theta, phi, angle in zip(positions[:, 0], positions[:, 1], psi):
+    for lon, lat, angle in zip(positions[:, 0], positions[:, 1], psi):
         # gnomview's rot expects (lon, lat) in degrees.
-        lon = np.degrees(phi)
-        lat = 90.0 - np.degrees(theta)
         patch = hp.gnomview(
             sky_map,
             rot=(lon, lat, angle),
