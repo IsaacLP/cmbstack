@@ -98,12 +98,11 @@ class StackingPipeline:
         n_peaks : int or None
             Maximum number of peaks to use; None means use all.
         positions : array_like, shape (N, 2), optional
-            External catalogue positions as ``(theta, phi)`` radians (see
-            :func:`cmbstack.stacking.radec_to_positions`). If given, peak
-            finding is skipped and ``threshold``/``n_peaks`` are ignored.
+            External catalogue positions as ``(lon, lat)`` in degrees. 
+            If given, peak finding is skipped and ``threshold``/``n_peaks`` 
+            are ignored.
         psi : array_like, shape (N,), optional
-            Per-patch rotation in degrees (see
-            :func:`cmbstack.stacking.orientation_to_psi`) for oriented stacking.
+            Per-patch rotation in degrees for oriented stacking.
 
         Returns
         -------
