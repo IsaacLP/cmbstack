@@ -35,7 +35,9 @@ class StackingPipeline:
     normalized : numpy.ndarray or None
         Set after run(); the normalized map.
     positions : numpy.ndarray or None
-        Set after run(); the peak positions in (theta, phi) radians.
+        Set after run(); the peak or catalogue positions in (theta, phi) radians.
+    psi : numpy.ndarray or None
+        Set after run(); the per-patch rotation angles in degrees, if any.
     patches : numpy.ndarray or None
         Set after run(); the extracted patches.
     stacked : numpy.ndarray or None
@@ -51,6 +53,7 @@ class StackingPipeline:
         self.nside = nside
         self.normalized = None
         self.positions = None
+        self.psi = None
         self.patches = None
         self.stacked = None
         self.radius = None
@@ -80,7 +83,8 @@ class StackingPipeline:
         return cls.from_map(sky_map)
     
 
-    def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None):
+    def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None,
+            positions=None, psi=None):
         """Run the full stacking loop.
 
         Parameters
@@ -93,6 +97,13 @@ class StackingPipeline:
             Peak-finding threshold in units of the map std.
         n_peaks : int or None
             Maximum number of peaks to use; None means use all.
+        positions : array_like, shape (N, 2), optional
+            External catalogue positions as ``(theta, phi)`` radians (see
+            :func:`cmbstack.stacking.radec_to_positions`). If given, peak
+            finding is skipped and ``threshold``/``n_peaks`` are ignored.
+        psi : array_like, shape (N,), optional
+            Per-patch rotation in degrees (see
+            :func:`cmbstack.stacking.orientation_to_psi`) for oriented stacking.
 
         Returns
         -------
@@ -103,9 +114,13 @@ class StackingPipeline:
 
         self.normalized = maps.normalize_map(self.map)
 
-        self.positions = stacking.find_peaks(self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks)
+        if positions is None:
+            self.positions = stacking.find_peaks(self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks)
+        else:
+            self.positions = np.atleast_2d(positions)
+        self.psi = psi
 
-        self.patches = stacking.extract_patches(self.normalized,self.positions,size_deg=size_deg,reso_arcmin=reso_arcmin)
+        self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,reso_arcmin=reso_arcmin)
 
         self.stacked = stacking.stack_patches(self.patches)
 

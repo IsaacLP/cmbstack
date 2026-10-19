@@ -73,10 +73,10 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
 # ---------------------------------------------------------------------------
 # Patch extraction
 # ---------------------------------------------------------------------------
-def extract_patches(sky_map, positions, size_deg=10.0, reso_arcmin=3.0):
+def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None, reso_arcmin=3.0):
     """Extract fixed-grid gnomonic patches centred on each position.
 
-    Each patch is a square 2D array produced by a gnomonic (tangent-plane)
+    Each patch is a square or a rectangular 2D array produced by a gnomonic (tangent-plane)
     projection centred on the position, so every patch shares the same grid and
     the centre pixel always corresponds to the position itself. 
 
@@ -87,34 +87,49 @@ def extract_patches(sky_map, positions, size_deg=10.0, reso_arcmin=3.0):
     positions : array_like, shape (N, 2)
         Sky positions as ``(theta, phi)`` in radians (e.g. the output of
         :func:`find_peaks`, or an external catalogue converted to this format).
-    size_deg : float, optional
+    psi : array_like, shape (N,), optional
+        Rotation angle in degrees for each patch, passed to ``gnomview``'s
+        ``rot``. Use :func:`orientation_to_psi` to align structures with a known
+        position angle along the patch x-axis. If None, defaults to 0.0.
+    size_deg_x : float, optional
         Full side length of the square patch in degrees. Default 10.0.
+    size_deg_y : float, optional
+        Full side length of the rectangular patch in degrees. If None, defaults
+        to ``size_deg_x`` (square patch). Default None.
     reso_arcmin : float, optional
         Pixel size of the projected patch in arcminutes. Default 3.0.
 
     Returns
     -------
     patches : list of numpy.ndarray
-        One square 2D array per position, all of identical shape
+        One square or rectangular 2D array per position, all of identical shape
+        if 
         ``(xsize, xsize)`` with ``xsize = size_deg * 60 / reso_arcmin``.
     """
     positions = np.atleast_2d(positions)
-    xsize = int(round(size_deg * 60.0 / reso_arcmin))
+    if size_deg_y is None:
+        size_deg_y = size_deg_x
+    xsize = int(round(size_deg_x * 60.0 / reso_arcmin))
+    ysize = int(round(size_deg_y * 60.0 / reso_arcmin))
 
     patches = []
-    for theta, phi in positions:
+    if psi is None:
+        psi = np.zeros(len(positions))
+    for theta, phi, angle in zip(positions[:, 0], positions[:, 1], psi):
         # gnomview's rot expects (lon, lat) in degrees.
         lon = np.degrees(phi)
         lat = 90.0 - np.degrees(theta)
         patch = hp.gnomview(
             sky_map,
-            rot=(lon, lat),
+            rot=(lon, lat, angle),
             xsize=xsize,
+            ysize=ysize,
             reso=reso_arcmin,
             return_projected_map=True,
             no_plot=True,
         )
-        patches.append(np.asarray(patch))
+        # Masked (UNSEEN) pixels become NaN so stack_patches ignores them.
+        patches.append(np.ma.filled(np.ma.asarray(patch, dtype=float), np.nan))
 
     return patches
 
