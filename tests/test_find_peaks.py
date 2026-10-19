@@ -18,11 +18,11 @@ def test_single_peak():
 
     assert len(positions) == 1
 
-    theta_expected, phi_expected = hp.pix2ang(nside, spike_pix)
-    theta_found, phi_found = positions[0]
+    lon_expected, lat_expected = hp.pix2ang(nside, spike_pix, lonlat=True)
+    lon_found, lat_found = positions[0]
 
-    assert np.isclose(theta_found, theta_expected)
-    assert np.isclose(phi_found, phi_expected)
+    assert np.isclose(lon_found, lon_expected)
+    assert np.isclose(lat_found, lat_expected)
 
 
 def test_high_threshold():
