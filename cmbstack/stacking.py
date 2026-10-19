@@ -73,6 +73,32 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
 # ---------------------------------------------------------------------------
 # Patch extraction
 # ---------------------------------------------------------------------------
+def size_mpc_to_deg(size_mpc, z, cosmo):
+    """Convert a physical size in Mpc to an angular size in degrees.
+
+    Uses the angular diameter distance at redshift ``z`` from the given
+    cosmology.
+
+    Parameters
+    ----------
+    size_mpc : float
+        Physical size in Mpc.
+    z : float
+        Redshift.
+    cosmo : astropy.cosmology.Cosmology
+        Cosmology object to compute the angular diameter distance.
+
+    Returns
+    -------
+    size_deg : float
+        Angular size in degrees.
+    """
+    d_a = cosmo.angular_diameter_distance(z).value  # Mpc
+    size_rad = size_mpc / d_a  # radians
+    size_deg = np.degrees(size_rad)
+    return size_deg
+
+
 def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None, reso_arcmin=3.0):
     """Extract fixed-grid gnomonic patches centred on each position.
 
