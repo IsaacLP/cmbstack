@@ -114,9 +114,8 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
         Sky positions as ``(lon, lat)`` in degrees (e.g. the output of
         :func:`find_peaks`, or an external catalogue converted to this format).
     psi : array_like, shape (N,), optional
-        Rotation angle in degrees for each patch, passed to ``gnomview``'s
-        ``rot``. Use :func:`orientation_to_psi` to align structures with a known
-        position angle along the patch x-axis. If None, defaults to 0.0.
+        Rotation angle in degrees for each patch, passed to the gnomonic projector's
+        ``rot``. If None, defaults to 0.0.
     size_deg_x : float, optional
         Full side length of the square patch in degrees. Default 10.0.
     size_deg_y : float, optional
@@ -138,22 +137,26 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     xsize = int(round(size_deg_x * 60.0 / reso_arcmin))
     ysize = int(round(size_deg_y * 60.0 / reso_arcmin))
 
+    # Masked arrays become plain arrays with UNSEEN at the masked pixels.
+    sky_map = hp.pixelfunc.ma_to_array(sky_map)
+    nside = hp.get_nside(sky_map)
+
+    def vec2pix(x, y, z):
+        return hp.vec2pix(nside, x, y, z)
+
     patches = []
     if psi is None:
         psi = np.zeros(len(positions))
     for lon, lat, angle in zip(positions[:, 0], positions[:, 1], psi):
-        # gnomview's rot expects (lon, lat) in degrees.
-        patch = hp.gnomview(
-            sky_map,
-            rot=(lon, lat, angle),
-            xsize=xsize,
-            ysize=ysize,
-            reso=reso_arcmin,
-            return_projected_map=True,
-            no_plot=True,
+        # Use the projector directly: same result as gnomview, but without
+        # building a matplotlib figure per patch. rot expects (lon, lat) in degrees.
+        proj = hp.projector.GnomonicProj(
+            rot=(lon, lat, angle), xsize=xsize, ysize=ysize, reso=reso_arcmin
         )
+        patch = proj.projmap(sky_map, vec2pix).astype(float)
         # Masked (UNSEEN) pixels become NaN so stack_patches ignores them.
-        patches.append(np.ma.filled(np.ma.asarray(patch, dtype=float), np.nan))
+        patch[hp.mask_bad(patch)] = np.nan
+        patches.append(patch)
 
     return patches
 
