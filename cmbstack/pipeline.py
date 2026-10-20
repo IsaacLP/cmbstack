@@ -35,7 +35,7 @@ class StackingPipeline:
     normalized : numpy.ndarray or None
         Set after run(); the normalized map.
     positions : numpy.ndarray or None
-        Set after run(); the peak or catalogue positions in (theta, phi) radians.
+        Set after run(); the peak or catalogue positions in (lon, lat) degrees.
     psi : numpy.ndarray or None
         Set after run(); the per-patch rotation angles in degrees, if any.
     patches : numpy.ndarray or None
