@@ -72,7 +72,8 @@ class StackingPipeline:
     def from_map(cls, sky_map):
         """Build a pipeline from a HEALPix map array already in memory. nside is inferred from the map length, so the caller doesn't have to supply it.
         """
-        sky_map = np.asarray(sky_map)
+        # Masked pixels become UNSEEN; np.asarray alone would drop the mask.
+        sky_map = np.ma.filled(sky_map, hp.UNSEEN)
         nside = hp.npix2nside(sky_map.size)
         return cls(sky_map, nside)
  
@@ -117,6 +118,8 @@ class StackingPipeline:
             self.positions = stacking.find_peaks(self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks)
         else:
             self.positions = np.atleast_2d(positions)
+        if len(self.positions) == 0:
+            raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
 
         self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,reso_arcmin=reso_arcmin)

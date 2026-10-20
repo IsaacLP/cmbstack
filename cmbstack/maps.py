@@ -123,16 +123,19 @@ def normalize_map(m):
     Parameters
     ----------
     m : array_like
-        Input HEALPix map. May contain UNSEEN/NaN pixels, which are ignored in
-        the mean and standard deviation.
+        Input HEALPix map. May contain UNSEEN/NaN pixels or be a masked array
+        (e.g. from ``hp.ma``); these pixels are ignored in the mean and
+        standard deviation and set to UNSEEN in the output.
 
     Returns
     -------
     m_norm : numpy.ndarray
         The normalized map, with mean ~0 and std ~1.
     """
-    m = np.asarray(m, dtype=float)
-    good = np.isfinite(m) & (m != hp.UNSEEN)
+    m = np.ma.filled(np.ma.asarray(m, dtype=float), hp.UNSEEN)
+    # mask_bad compares to UNSEEN with a tolerance, so UNSEEN stored as float32
+    # (e.g. Planck maps from hp.read_map) is still recognised; it also flags NaN/inf.
+    good = ~hp.mask_bad(m)
     m_norm = np.full_like(m, hp.UNSEEN)
     m_good = m[good] - m[good].mean()
     m_norm[good] = m_good / m_good.std()
