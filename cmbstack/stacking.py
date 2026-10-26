@@ -21,12 +21,16 @@ import healpy as hp
 # ---------------------------------------------------------------------------
 # Position finding
 # ---------------------------------------------------------------------------
-def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
+def find_peaks(sky_map, nside, threshold=None, n_peaks=None, mask_distance_deg=None,
+               return_n_rejected=False):
     """Find local maxima of a HEALPix map and return their sky positions.
 
     A pixel is a local maximum if its value is strictly greater than all of its
     immediate HEALPix neighbours. Peaks can be filtered by a significance
     threshold and/or capped at the ``n_peaks`` highest.
+
+    Peaks next to masked (UNSEEN) pixels are discarded: there a pixel only has
+    to beat its unmasked neighbours, so the true maximum may lie under the mask.
 
     Parameters
     ----------
@@ -40,17 +44,43 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
         3-sigma peaks on a normalised map). Default None (no threshold).
     n_peaks : int, optional
         If given, keep only the ``n_peaks`` highest peaks (applied after the
-        threshold). Default None (keep all).
+        threshold and the mask cut). Default None (keep all).
+    mask_distance_deg : float, optional
+        If given, also discard peaks with any masked pixel within this angular
+        distance in degrees. Default None (only the immediate neighbours are
+        checked).
+    return_n_rejected : bool, optional
+        If True, also return the number of peaks discarded for being next to
+        (or within ``mask_distance_deg`` of) the mask. Default False.
 
     Returns
     -------
     positions : numpy.ndarray, shape (N, 2)
         Sky positions of the selected peaks as ``(lon, lat)`` in degrees, the
         same format accepted by :func:`extract_patches`.
+    n_rejected : int
+        Number of peaks discarded by the mask cut (before ``threshold`` and
+        ``n_peaks``). Only returned if ``return_n_rejected`` is True.
     """
     # hp.hotspots returns (max_map, minima_pix, maxima_pix); we want the maxima.
     _, _, maxima_pix = hp.hotspots(sky_map)
     maxima_pix = np.asarray(maxima_pix)
+
+    # Drop peaks touching the mask (or within mask_distance_deg of it).
+    bad = hp.mask_bad(sky_map)
+    n_rejected = 0
+    if bad.any() and maxima_pix.size:
+        neighbours = hp.get_all_neighbours(nside, maxima_pix)
+        near_mask = np.any((neighbours >= 0) & bad[neighbours], axis=0)
+        if mask_distance_deg is not None:
+            radius = np.radians(mask_distance_deg)
+            vecs = hp.pix2vec(nside, maxima_pix)
+            near_mask |= [
+                bad[hp.query_disc(nside, v, radius, inclusive=True)].any()
+                for v in np.transpose(vecs)
+            ]
+        n_rejected = int(np.count_nonzero(near_mask))
+        maxima_pix = maxima_pix[~near_mask]
 
     values = sky_map[maxima_pix]
 
@@ -67,7 +97,10 @@ def find_peaks(sky_map, nside, threshold=None, n_peaks=None):
         maxima_pix = maxima_pix[:n_peaks]
 
     lon, lat = hp.pix2ang(nside, maxima_pix,lonlat=True)
-    return np.column_stack([lon, lat])
+    positions = np.column_stack([lon, lat])
+    if return_n_rejected:
+        return positions, n_rejected
+    return positions
 
 
 # ---------------------------------------------------------------------------
@@ -164,26 +197,52 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
 # ---------------------------------------------------------------------------
 # Stacking
 # ---------------------------------------------------------------------------
-def stack_patches(patches):
+def stack_patches(patches, min_count=1, return_counts=False):
     """Average patches pixel-by-pixel into a single stacked image.
 
     Because every patch shares the same fixed grid (see :func:`extract_patches`),
     the mean is a genuine stacked image: incoherent noise averages towards zero
-    while the coherent central profile survives. NaN/UNSEEN pixels (patch edges
-    that fall off the map near the poles) are ignored.
+    while the coherent central profile survives. NaN pixels (masked or UNSEEN
+    regions of the map) are ignored.
+
+    The function counts the number of times each pixel contributes (its number
+    of valid, finite values across patches) and divides the sum by that count,
+    rather than by the total number of patches. Pixels with fewer than
+    ``min_count`` contributions are set to NaN.
 
     Parameters
     ----------
     patches : sequence of numpy.ndarray
         Patches of identical shape, e.g. the output of :func:`extract_patches`.
+    min_count : int or float, optional
+        Minimum number of contributions for a pixel to be kept. A float in
+        (0, 1) is a fraction of the number of patches. Default 1 (keep every
+        pixel with at least one contribution).
+    return_counts : bool, optional
+        If True, also return the per-pixel count map. Default False.
 
     Returns
     -------
     stacked : numpy.ndarray
         The mean 2D patch. Display with ``plt.imshow(stacked)``.
+    counts : numpy.ndarray of int
+        Number of patches contributing to each pixel. Only returned if
+        ``return_counts`` is True.
     """
     stack = np.array(patches, dtype=float)
-    mean_stacked = np.nanmean(stack, axis=0)
+    if isinstance(min_count, float) and 0.0 < min_count < 1.0:
+        min_count = int(np.ceil(min_count * len(stack)))
+    min_count = max(int(min_count), 1)
+
+    valid = np.isfinite(stack)
+    counts = valid.sum(axis=0)
+    total = np.where(valid, stack, 0.0).sum(axis=0)
+
+    mean_stacked = np.full(counts.shape, np.nan)
+    np.divide(total, counts, out=mean_stacked, where=counts >= min_count)
+
+    if return_counts:
+        return mean_stacked, counts
     return mean_stacked
 
 

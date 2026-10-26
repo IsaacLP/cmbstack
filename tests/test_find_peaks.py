@@ -57,6 +57,32 @@ def test_high_n_peaks():
     assert len(new_positions) == len(positions)
 
 
+def test_peaks_near_mask_dropped():
+    '''Test if find_peaks discards peaks touching the mask, or within mask_distance_deg of it'''
+    nside = 64
+    m = np.zeros(hp.nside2npix(nside))
+
+    edge_pix = hp.ang2pix(nside, 0.0, 0.0, lonlat=True)
+    far_pix = hp.ang2pix(nside, 180.0, 0.0, lonlat=True)
+    mid_pix = hp.ang2pix(nside, 0.0, 10.0, lonlat=True)
+    m[[edge_pix, far_pix, mid_pix]] = 10.0
+
+    # Mask a neighbour of edge_pix, plus a pixel 5 deg away from mid_pix.
+    m[hp.get_all_neighbours(nside, edge_pix)[0]] = hp.UNSEEN
+    m[hp.ang2pix(nside, 0.0, 15.0, lonlat=True)] = hp.UNSEEN
+
+    positions, n_rejected = find_peaks(m, nside=nside, threshold=5.0, return_n_rejected=True)
+    found = hp.ang2pix(nside, positions[:, 0], positions[:, 1], lonlat=True)
+    assert set(found) == {far_pix, mid_pix}
+    assert n_rejected == 1
+
+    positions, n_rejected = find_peaks(m, nside=nside, threshold=5.0, mask_distance_deg=6.0,
+                                       return_n_rejected=True)
+    found = hp.ang2pix(nside, positions[:, 0], positions[:, 1], lonlat=True)
+    assert set(found) == {far_pix}
+    assert n_rejected == 2
+
+
 if __name__ == '__main__':
 
     test_high_threshold()

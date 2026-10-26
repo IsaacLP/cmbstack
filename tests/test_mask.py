@@ -1,9 +1,12 @@
+import warnings
+
 import numpy as np
 import healpy as hp
 import pytest
 
 from cmbstack import StackingPipeline
 from cmbstack.maps import normalize_map
+from cmbstack.stacking import stack_patches
 
 
 def _masked_map(nside=32, dtype=np.float64):
@@ -44,6 +47,29 @@ def test_from_map_keeps_mask(dtype):
     assert len(pipeline.positions) > 0
     pix = hp.ang2pix(pipeline.nside, pipeline.positions[:, 0], pipeline.positions[:, 1], lonlat=True)
     assert not np.any(mask[pix])
+
+
+def test_stack_patches_counts():
+    '''Test if stack_patches divides by the per-pixel count and applies min_count'''
+    nan = np.nan
+    patches = [
+        np.array([[1.0, 2.0], [nan, nan]]),
+        np.array([[3.0, nan], [5.0, nan]]),
+        np.array([[5.0, 4.0], [nan, nan]]),
+    ]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # no "Mean of empty slice" for the all-NaN pixel
+        stacked, counts = stack_patches(patches, return_counts=True)
+
+    assert np.array_equal(counts, [[3, 2], [1, 0]])
+    assert np.allclose(stacked, [[3.0, 3.0], [5.0, nan]], equal_nan=True)
+
+    # Pixels seen by fewer than 2 patches are dropped, also as a fraction.
+    expected = [[3.0, 3.0], [nan, nan]]
+    assert np.allclose(stack_patches(patches, min_count=2), expected, equal_nan=True)
+    assert np.allclose(stack_patches(patches, min_count=0.5), expected, equal_nan=True)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -85,7 +85,7 @@ class StackingPipeline:
     
 
     def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None,
-            positions=None, psi=None):
+            positions=None, psi=None, min_count=1, mask_distance_deg=None, verbose=False):
         """Run the full stacking loop.
 
         Parameters
@@ -104,6 +104,17 @@ class StackingPipeline:
             are ignored.
         psi : array_like, shape (N,), optional
             Per-patch rotation in degrees for oriented stacking.
+        min_count : int or float
+            Minimum number of contributing patches for a stacked pixel to be
+            kept (see :func:`stacking.stack_patches`). The per-pixel counts
+            are stored in ``self.counts``.
+        mask_distance_deg : float or None
+            Discard detected peaks with a masked pixel within this distance in
+            degrees (see :func:`stacking.find_peaks`). Peaks touching the mask
+            are always discarded. Ignored when ``positions`` is given. The
+            number of discarded peaks is stored in ``self.n_rejected``.
+        verbose : bool
+            If True, print how many peaks were kept and rejected by the mask cut.
 
         Returns
         -------
@@ -115,16 +126,22 @@ class StackingPipeline:
         self.normalized = maps.normalize_map(self.map)
 
         if positions is None:
-            self.positions = stacking.find_peaks(self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks)
+            self.positions, self.n_rejected = stacking.find_peaks(
+                self.normalized, self.nside, threshold=threshold, n_peaks=n_peaks,
+                mask_distance_deg=mask_distance_deg, return_n_rejected=True)
+            if verbose:
+                print(f"find_peaks: kept {len(self.positions)} peaks, "
+                      f"rejected {self.n_rejected} near the mask")
         else:
             self.positions = np.atleast_2d(positions)
+            self.n_rejected = 0
         if len(self.positions) == 0:
             raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
 
         self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,reso_arcmin=reso_arcmin)
 
-        self.stacked = stacking.stack_patches(self.patches)
+        self.stacked, self.counts = stacking.stack_patches(self.patches, min_count=min_count, return_counts=True)
 
         if profile:
             self.radius, self.profile = stacking.radial_profile(self.stacked,reso_arcmin=reso_arcmin)
