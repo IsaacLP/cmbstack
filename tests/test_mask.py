@@ -49,6 +49,18 @@ def test_from_map_keeps_mask(dtype):
     assert not np.any(mask[pix])
 
 
+def test_run_rectangular_patches():
+    '''Test if run() passes size_deg_y through to the patches and the stack'''
+    _, m_masked = _masked_map()
+    pipeline = StackingPipeline.from_map(m_masked).run(size_deg=10.0, size_deg_y=6.0,
+                                                       reso_arcmin=30.0, threshold=2.0,
+                                                       profile=False)
+
+    # extract_patches returns (ysize, xsize) arrays.
+    assert pipeline.patches[0].shape == (12, 20)
+    assert pipeline.stacked.shape == (12, 20)
+
+
 def test_stack_patches_counts():
     '''Test if stack_patches divides by the per-pixel count and applies min_count'''
     nan = np.nan
