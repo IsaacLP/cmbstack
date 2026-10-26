@@ -85,13 +85,17 @@ class StackingPipeline:
     
 
     def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None,
-            positions=None, psi=None, min_count=1, mask_distance_deg=None, verbose=False):
+            positions=None, psi=None, min_count=1, mask_distance_deg=None, verbose=False,
+            size_deg_y=None):
         """Run the full stacking loop.
 
         Parameters
         ----------
         size_deg, reso_arcmin : float
-            Patch geometry.
+            Patch geometry: side length in x (degrees) and pixel size (arcmin).
+        size_deg_y : float or None
+            Patch side length in y in degrees. None (default) gives a square
+            patch of side ``size_deg``.
         profile : bool
             Whether to also compute the radial profile.
         threshold : float
@@ -139,7 +143,8 @@ class StackingPipeline:
             raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
 
-        self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,reso_arcmin=reso_arcmin)
+        self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,
+                                                size_deg_y=size_deg_y,reso_arcmin=reso_arcmin)
 
         self.stacked, self.counts = stacking.stack_patches(self.patches, min_count=min_count, return_counts=True)
 
