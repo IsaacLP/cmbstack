@@ -86,7 +86,7 @@ class StackingPipeline:
 
     def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None,
             positions=None, psi=None, min_count=1, mask_distance_deg=None, verbose=False,
-            size_deg_y=None):
+            size_deg_y=None, keep_patches=True):
         """Run the full stacking loop.
 
         Parameters
@@ -119,6 +119,11 @@ class StackingPipeline:
             number of discarded peaks is stored in ``self.n_rejected``.
         verbose : bool
             If True, print how many peaks were kept and rejected by the mask cut.
+        keep_patches : bool
+            If True (default), keep every patch in ``self.patches``. If False,
+            stream the patches straight into the stack and set ``self.patches``
+            to None: memory then stays at about one patch whatever the number
+            of positions, which is needed for large catalogues.
 
         Returns
         -------
@@ -143,10 +148,13 @@ class StackingPipeline:
             raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
 
-        self.patches = stacking.extract_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,
-                                                size_deg_y=size_deg_y,reso_arcmin=reso_arcmin)
+        patches = stacking.iter_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,
+                                        size_deg_y=size_deg_y,reso_arcmin=reso_arcmin)
+        if keep_patches:
+            patches = list(patches)
+        self.patches = patches if keep_patches else None
 
-        self.stacked, self.counts = stacking.stack_patches(self.patches, min_count=min_count, return_counts=True)
+        self.stacked, self.counts = stacking.stack_patches(patches, min_count=min_count, return_counts=True)
 
         if profile:
             self.radius, self.profile = stacking.radial_profile(self.stacked,reso_arcmin=reso_arcmin)

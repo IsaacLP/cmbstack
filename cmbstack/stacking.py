@@ -160,9 +160,31 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     Returns
     -------
     patches : list of numpy.ndarray
-        One square or rectangular 2D array per position, all of identical shape
-        if 
-        ``(xsize, xsize)`` with ``xsize = size_deg * 60 / reso_arcmin``.
+        One 2D array per position, all of shape ``(xsize, ysize)`` with
+        ``xsize = size_deg_x * 60 / reso_arcmin`` and
+        ``ysize = size_deg_y * 60 / reso_arcmin``. Masked pixels are NaN.
+
+    See Also
+    --------
+    iter_patches : The same patches one at a time, without keeping them all in
+        memory.
+    """
+    return list(iter_patches(sky_map, positions, psi=psi, size_deg_x=size_deg_x,
+                             size_deg_y=size_deg_y, reso_arcmin=reso_arcmin))
+
+
+def iter_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None, reso_arcmin=3.0):
+    """Yield the patches of :func:`extract_patches` one at a time.
+
+    Takes the same arguments as :func:`extract_patches`. Only one patch is in
+    memory at a time, so passing this generator to :func:`stack_patches` stacks
+    any number of positions in constant memory.
+
+    Yields
+    ------
+    patch : numpy.ndarray
+        2D array of shape ``(ysize, xsize)`` for the next position, with masked
+        pixels set to NaN.
     """
     positions = np.atleast_2d(positions)
     if size_deg_y is None:
@@ -177,7 +199,6 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     def vec2pix(x, y, z):
         return hp.vec2pix(nside, x, y, z)
 
-    patches = []
     if psi is None:
         psi = np.zeros(len(positions))
     for lon, lat, angle in zip(positions[:, 0], positions[:, 1], psi):
@@ -189,9 +210,7 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
         patch = proj.projmap(sky_map, vec2pix).astype(float)
         # Masked (UNSEEN) pixels become NaN so stack_patches ignores them.
         patch[hp.mask_bad(patch)] = np.nan
-        patches.append(patch)
-
-    return patches
+        yield patch
 
 
 # ---------------------------------------------------------------------------
@@ -212,8 +231,11 @@ def stack_patches(patches, min_count=1, return_counts=False):
 
     Parameters
     ----------
-    patches : sequence of numpy.ndarray
-        Patches of identical shape, e.g. the output of :func:`extract_patches`.
+    patches : iterable of numpy.ndarray
+        Patches of identical shape: a list such as the output of
+        :func:`extract_patches`, or a generator such as :func:`iter_patches`.
+        The patches are accumulated one at a time, so a generator never needs
+        all of them in memory.
     min_count : int or float, optional
         Minimum number of contributions for a pixel to be kept. A float in
         (0, 1) is a fraction of the number of patches. Default 1 (keep every
@@ -229,14 +251,26 @@ def stack_patches(patches, min_count=1, return_counts=False):
         Number of patches contributing to each pixel. Only returned if
         ``return_counts`` is True.
     """
-    stack = np.array(patches, dtype=float)
-    if isinstance(min_count, float) and 0.0 < min_count < 1.0:
-        min_count = int(np.ceil(min_count * len(stack)))
-    min_count = max(int(min_count), 1)
+    # Running sum and per-pixel count, so only one patch is needed at a time.
+    total = counts = None
+    n_patches = 0
+    for patch in patches:
+        patch = np.asarray(patch, dtype=float)
+        if total is None:
+            total = np.zeros(patch.shape)
+            counts = np.zeros(patch.shape, dtype=int)
+        elif patch.shape != total.shape:
+            raise ValueError(f"Patch {n_patches} has shape {patch.shape}, expected {total.shape}.")
+        valid = np.isfinite(patch)
+        total += np.where(valid, patch, 0.0)
+        counts += valid
+        n_patches += 1
+    if n_patches == 0:
+        raise ValueError("No patches to stack.")
 
-    valid = np.isfinite(stack)
-    counts = valid.sum(axis=0)
-    total = np.where(valid, stack, 0.0).sum(axis=0)
+    if isinstance(min_count, float) and 0.0 < min_count < 1.0:
+        min_count = int(np.ceil(min_count * n_patches))
+    min_count = max(int(min_count), 1)
 
     mean_stacked = np.full(counts.shape, np.nan)
     np.divide(total, counts, out=mean_stacked, where=counts >= min_count)
