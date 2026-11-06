@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cmbstack"
 dynamic = ["version"]
-description = "Stack patches of the CMB temperature sky around local maxima"
+description = "Stack patches of HEALPix maps around peaks or catalogue positions"
 readme = "README.md"
 authors = [
     {name = "Isaac Alexis López Paredes", email = "isaacalexis.lopezparedes@students.uniroma2.eu"},
