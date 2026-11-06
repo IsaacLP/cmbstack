@@ -19,3 +19,41 @@ The tutorials below are worked examples. The notebooks and the files required to
    Tutorial: Planck peak stacking <tutorials/planck_peak_stacking>
    Tutorial: oriented stacking on filaments <tutorials/filament_oriented_stacking>
    api
+
+
+Changelog
+---------
+
+v0.2.0
+~~~~~~
+
+**Breaking changes**
+
+- Sky positions are now ``(lon, lat)`` in degrees everywhere (``find_peaks``, ``extract_patches``, ``StackingPipeline.run``), instead of ``(theta, phi)`` in radians.
+
+**New features**
+
+- ``StackingPipeline.run`` accepts external ``positions`` (previously only possible by calling ``extract_patches`` directly) and per-patch rotation angles ``psi``, for oriented stacking.
+- Rectangular patches: ``size_deg_y`` in ``extract_patches`` and ``run()``, with ``size_deg`` as the side along x.
+- ``size_mpc_to_deg`` converts a physical size in Mpc to an angle at redshift z, for an astropy cosmology.
+- Masked maps:
+
+  - ``from_map`` keeps the mask of an ``hp.ma`` array.
+  - ``normalize_map`` computes the mean and std on unmasked pixels only, including for float32 maps.
+  - Masked pixels become NaN in the patches.
+
+- Per-pixel hit counts: ``stack_patches`` divides each pixel by the number of patches with a valid value there, takes ``min_count``, and can return the count map (``return_counts=True``, ``pipeline.counts``).
+- ``find_peaks`` drops peaks next to the mask, and ``mask_distance_deg`` widens the cut. ``return_n_rejected=True``, ``run(verbose=True)`` and ``pipeline.n_rejected`` report how many were dropped.
+- Streaming: ``iter_patches`` yields one patch at a time, ``stack_patches`` accepts any iterable, and ``run(keep_patches=False)`` stacks any number of positions in constant memory.
+
+**Other changes**
+
+- ``extract_patches`` uses ``GnomonicProj`` directly, which is faster because it no longer creates a matplotlib figure per patch.
+- ``run()`` raises a clear ``ValueError`` when no peaks are found.
+- New tutorials: peak stacking on the Planck SMICA map, and oriented stacking of an SDSS galaxy overdensity map on a cosmic filament catalogue.
+
+v0.1.1
+~~~~~~
+
+- ``load_cl`` reads the chosen column with pandas.
+- Runtime test placeholder moved to ``tests/test_runtime.py``.
