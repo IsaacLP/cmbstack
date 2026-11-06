@@ -8,10 +8,16 @@ stacking-on-catalogue (clusters, voids, filaments, ...).
 
 Typical use
 -----------
->>> peaks = find_peaks(m, nside, threshold=3.0)      # positions in (theta, phi)
+>>> peaks = find_peaks(m, nside, threshold=3.0)      # positions in (lon, lat), degrees
 >>> patches = extract_patches(m, peaks)              # fixed-grid 2D cutouts
 >>> stacked = stack_patches(patches)                 # mean 2D image
 >>> r, profile = radial_profile(stacked, reso_arcmin=3.0)
+
+Oriented stacking on a catalogue, streaming the patches so that only one is in
+memory at a time:
+
+>>> patches = iter_patches(m, positions, psi=angles, size_deg=2.4, size_deg_y=12.0)
+>>> stacked, counts = stack_patches(patches, return_counts=True)
 """
 
 import numpy as np
@@ -132,7 +138,7 @@ def size_mpc_to_deg(size_mpc, z, cosmo):
     return size_deg
 
 
-def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None, reso_arcmin=3.0):
+def extract_patches(sky_map, positions, psi=None, size_deg=10.0, size_deg_y=None, reso_arcmin=3.0):
     """Extract fixed-grid gnomonic patches centred on each position.
 
     Each patch is a square or a rectangular 2D array produced by a gnomonic (tangent-plane)
@@ -149,19 +155,20 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     psi : array_like, shape (N,), optional
         Rotation angle in degrees for each patch, passed to the gnomonic projector's
         ``rot``. If None, defaults to 0.0.
-    size_deg_x : float, optional
-        Full side length of the square patch in degrees. Default 10.0.
+    size_deg : float, optional
+        Full side length of the patch along x in degrees (along the direction
+        given by ``psi`` for a rotated patch). Default 10.0.
     size_deg_y : float, optional
-        Full side length of the rectangular patch in degrees. If None, defaults
-        to ``size_deg_x`` (square patch). Default None.
+        Full side length of the patch along y in degrees. If None, defaults
+        to ``size_deg`` (square patch). Default None.
     reso_arcmin : float, optional
         Pixel size of the projected patch in arcminutes. Default 3.0.
 
     Returns
     -------
     patches : list of numpy.ndarray
-        One 2D array per position, all of shape ``(xsize, ysize)`` with
-        ``xsize = size_deg_x * 60 / reso_arcmin`` and
+        One 2D array per position, all of shape ``(ysize, xsize)`` with
+        ``xsize = size_deg * 60 / reso_arcmin`` and
         ``ysize = size_deg_y * 60 / reso_arcmin``. Masked pixels are NaN.
 
     See Also
@@ -169,11 +176,11 @@ def extract_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=No
     iter_patches : The same patches one at a time, without keeping them all in
         memory.
     """
-    return list(iter_patches(sky_map, positions, psi=psi, size_deg_x=size_deg_x,
+    return list(iter_patches(sky_map, positions, psi=psi, size_deg=size_deg,
                              size_deg_y=size_deg_y, reso_arcmin=reso_arcmin))
 
 
-def iter_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None, reso_arcmin=3.0):
+def iter_patches(sky_map, positions, psi=None, size_deg=10.0, size_deg_y=None, reso_arcmin=3.0):
     """Yield the patches of :func:`extract_patches` one at a time.
 
     Takes the same arguments as :func:`extract_patches`. Only one patch is in
@@ -188,8 +195,8 @@ def iter_patches(sky_map, positions, psi=None, size_deg_x=10.0, size_deg_y=None,
     """
     positions = np.atleast_2d(positions)
     if size_deg_y is None:
-        size_deg_y = size_deg_x
-    xsize = int(round(size_deg_x * 60.0 / reso_arcmin))
+        size_deg_y = size_deg
+    xsize = int(round(size_deg * 60.0 / reso_arcmin))
     ysize = int(round(size_deg_y * 60.0 / reso_arcmin))
 
     # Masked arrays become plain arrays with UNSEEN at the masked pixels.

@@ -148,7 +148,7 @@ class StackingPipeline:
             raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
 
-        patches = stacking.iter_patches(self.normalized,self.positions,psi=self.psi,size_deg_x=size_deg,
+        patches = stacking.iter_patches(self.normalized,self.positions,psi=self.psi,size_deg=size_deg,
                                         size_deg_y=size_deg_y,reso_arcmin=reso_arcmin)
         if keep_patches:
             patches = list(patches)
