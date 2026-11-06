@@ -6,7 +6,7 @@
 
 # cmbstack
 
-Stack patches of the Cosmic Microwave Background (CMB) temperature sky. Go [here](https://cmbstack-docs.readthedocs.io/en/latest/index.html) to see the full documentation and a worked example.
+Stack patches of HEALPix maps, such as the CMB temperature, CMB lensing or galaxy density, around their peaks or around the positions of a catalogue. Go [here](https://cmbstack-docs.readthedocs.io/en/latest/index.html) to see the full documentation, and [here](https://github.com/IsaacLP/cmbstack/tree/main/docs/tutorials) for worked examples.
 
 ## Installation
 
@@ -45,3 +45,15 @@ stacked_result = pipeline.run()
 pipeline = StackingPipeline.from_map(sky_map)
 stacked_result = pipeline.run()
 ```
+
+A masked map (`healpy.ma`) keeps its mask: masked pixels are ignored, and `pipeline.counts` gives the number of patches contributing to each pixel.
+
+**On the positions of a catalogue, with a rotation for each patch:**
+```python
+# positions: (N, 2) array of (lon, lat) in degrees; angles: (N,) rotations in degrees
+pipeline = StackingPipeline.from_map(sky_map)
+stacked_result = pipeline.run(positions=positions, psi=angles, size_deg=2.4, size_deg_y=12.0,
+                              profile=False, keep_patches=False)
+```
+
+`keep_patches=False` stacks the patches one at a time instead of keeping them all in memory, which is needed for large catalogues.
