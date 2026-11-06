@@ -89,7 +89,7 @@ def _masked_patch_args():
     rng = np.random.default_rng(1)
     positions = np.column_stack([rng.uniform(0, 360, 50), rng.uniform(-60, 60, 50)])
     psi = rng.uniform(0, 180, 50)
-    return m_masked, positions, dict(psi=psi, size_deg_x=10.0, size_deg_y=6.0, reso_arcmin=30.0)
+    return m_masked, positions, dict(psi=psi, size_deg=10.0, size_deg_y=6.0, reso_arcmin=30.0)
 
 
 def test_iter_patches_matches_extract_patches():
