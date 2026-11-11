@@ -223,7 +223,7 @@ def iter_patches(sky_map, positions, psi=None, size_deg=10.0, size_deg_y=None, r
 # ---------------------------------------------------------------------------
 # Stacking
 # ---------------------------------------------------------------------------
-def stack_patches(patches, min_count=1, return_counts=False):
+def stack_patches(patches, min_count=1, return_counts=False, weights=None):
     """Average patches pixel-by-pixel into a single stacked image.
 
     Because every patch shares the same fixed grid (see :func:`extract_patches`),
@@ -235,6 +235,10 @@ def stack_patches(patches, min_count=1, return_counts=False):
     of valid, finite values across patches) and divides the sum by that count,
     rather than by the total number of patches. Pixels with fewer than
     ``min_count`` contributions are set to NaN.
+
+    With ``weights``, each pixel is the weighted mean of the patches with a
+    valid value there, ``sum(w * patch) / sum(w)``, with the sums running over
+    those patches only.
 
     Parameters
     ----------
@@ -249,6 +253,11 @@ def stack_patches(patches, min_count=1, return_counts=False):
         pixel with at least one contribution).
     return_counts : bool, optional
         If True, also return the per-pixel count map. Default False.
+    weights : iterable of float, optional
+        One non-negative weight per patch, in the same order as ``patches``
+        (a list, an array or a generator). Default None (every patch has
+        weight 1). ``min_count`` and the returned counts still count patches,
+        not weights.
 
     Returns
     -------
@@ -258,29 +267,49 @@ def stack_patches(patches, min_count=1, return_counts=False):
         Number of patches contributing to each pixel. Only returned if
         ``return_counts`` is True.
     """
-    # Running sum and per-pixel count, so only one patch is needed at a time.
-    total = counts = None
+    # Running weighted sum, sum of weights and per-pixel count, so only one
+    # patch is needed at a time.
+    total = weight_sum = counts = None
     n_patches = 0
+    no_more = object()
+    if weights is not None:
+        weights = iter(weights)
     for patch in patches:
         patch = np.asarray(patch, dtype=float)
         if total is None:
             total = np.zeros(patch.shape)
+            weight_sum = np.zeros(patch.shape)
             counts = np.zeros(patch.shape, dtype=int)
         elif patch.shape != total.shape:
             raise ValueError(f"Patch {n_patches} has shape {patch.shape}, expected {total.shape}.")
+
+        if weights is None:
+            w = 1.0
+        else:
+            w = next(weights, no_more)
+            if w is no_more:
+                raise ValueError(f"Got more patches than weights ({n_patches} weights).")
+            w = float(w)
+            if not np.isfinite(w) or w < 0:
+                raise ValueError(f"Weight {n_patches} is {w}; weights must be finite and non-negative.")
+
         valid = np.isfinite(patch)
-        total += np.where(valid, patch, 0.0)
+        total += np.where(valid, w * patch, 0.0)
+        weight_sum += w * valid
         counts += valid
         n_patches += 1
     if n_patches == 0:
         raise ValueError("No patches to stack.")
+    if weights is not None and next(weights, no_more) is not no_more:
+        raise ValueError(f"Got more weights than patches ({n_patches} patches).")
 
     if isinstance(min_count, float) and 0.0 < min_count < 1.0:
         min_count = int(np.ceil(min_count * n_patches))
     min_count = max(int(min_count), 1)
 
     mean_stacked = np.full(counts.shape, np.nan)
-    np.divide(total, counts, out=mean_stacked, where=counts >= min_count)
+    # A pixel whose patches all have weight 0 has no weighted mean, so it stays NaN.
+    np.divide(total, weight_sum, out=mean_stacked, where=(counts >= min_count) & (weight_sum > 0))
 
     if return_counts:
         return mean_stacked, counts
