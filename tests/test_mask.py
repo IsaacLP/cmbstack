@@ -83,6 +83,39 @@ def test_stack_patches_counts():
     assert np.allclose(stack_patches(patches, min_count=0.5), expected, equal_nan=True)
 
 
+def test_stack_patches_weights():
+    '''Test if stack_patches takes the weighted mean over the valid patches at each pixel'''
+    nan = np.nan
+    patches = [
+        np.array([[1.0, 2.0], [nan, nan]]),
+        np.array([[3.0, nan], [5.0, nan]]),
+        np.array([[5.0, 4.0], [nan, nan]]),
+    ]
+    weights = [1.0, 2.0, 0.5]
+
+    stacked, counts = stack_patches(patches, return_counts=True, weights=weights)
+
+    # Pixel (0, 1) only sees patches 0 and 2, so only their weights enter the mean.
+    expected = [[(1 * 1 + 2 * 3 + 0.5 * 5) / 3.5, (1 * 2 + 0.5 * 4) / 1.5], [5.0, nan]]
+    assert np.allclose(stacked, expected, equal_nan=True)
+    assert np.array_equal(counts, [[3, 2], [1, 0]])  # counts are not weighted
+
+    # Equal weights give the unweighted mean, and a generator works like a list.
+    assert np.allclose(stack_patches(patches, weights=[2.0] * 3), stack_patches(patches), equal_nan=True)
+    assert np.allclose(stack_patches(iter(patches), weights=iter(weights)), stacked, equal_nan=True)
+
+    # A pixel whose only contribution has weight 0 has no mean.
+    assert np.isnan(stack_patches(patches, weights=[1.0, 0.0, 1.0])[1, 0])
+
+
+def test_stack_patches_weights_errors():
+    '''Test if stack_patches rejects too few or too many weights, and negative or NaN weights'''
+    patches = [np.zeros((2, 2)), np.ones((2, 2))]
+    for weights in [[1.0], [1.0, 1.0, 1.0], [1.0, -1.0], [1.0, np.nan]]:
+        with pytest.raises(ValueError):
+            stack_patches(patches, weights=weights)
+
+
 def _masked_patch_args():
     '''Masked map, random positions and angles for the streaming tests'''
     _, m_masked = _masked_map()
