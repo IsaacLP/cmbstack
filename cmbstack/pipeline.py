@@ -38,6 +38,8 @@ class StackingPipeline:
         Set after run(); the peak or catalogue positions in (lon, lat) degrees.
     psi : numpy.ndarray or None
         Set after run(); the per-patch rotation angles in degrees, if any.
+    weights : numpy.ndarray or None
+        Set after run(); the per-patch weights, if any.
     patches : numpy.ndarray or None
         Set after run(); the extracted patches.
     stacked : numpy.ndarray or None
@@ -54,6 +56,7 @@ class StackingPipeline:
         self.normalized = None
         self.positions = None
         self.psi = None
+        self.weights = None
         self.patches = None
         self.stacked = None
         self.radius = None
@@ -86,7 +89,7 @@ class StackingPipeline:
 
     def run(self, size_deg=10.0, reso_arcmin=3.0, profile=True, threshold=3.0, n_peaks=None,
             positions=None, psi=None, min_count=1, mask_distance_deg=None, verbose=False,
-            size_deg_y=None, keep_patches=True):
+            size_deg_y=None, keep_patches=True, weights=None):
         """Run the full stacking loop.
 
         Parameters
@@ -108,6 +111,11 @@ class StackingPipeline:
             are ignored.
         psi : array_like, shape (N,), optional
             Per-patch rotation in degrees for oriented stacking.
+        weights : array_like, shape (N,), optional
+            One non-negative weight per position, in the same order as
+            ``positions``; the stack is then the weighted mean at each pixel
+            (see :func:`stacking.stack_patches`). Requires ``positions``.
+            Stored in ``self.weights``.
         min_count : int or float
             Minimum number of contributing patches for a stacked pixel to be
             kept (see :func:`stacking.stack_patches`). The per-pixel counts
@@ -132,6 +140,14 @@ class StackingPipeline:
             attributes.
         """
 
+        if weights is not None:
+            if positions is None:
+                raise ValueError("weights requires positions: the order of detected peaks is not known in advance.")
+            weights = np.asarray(weights, dtype=float)
+            n_positions = len(np.atleast_2d(positions))
+            if weights.shape != (n_positions,):
+                raise ValueError(f"weights has shape {weights.shape}, expected ({n_positions},), one per position.")
+
         self.normalized = maps.normalize_map(self.map)
 
         if positions is None:
@@ -147,6 +163,7 @@ class StackingPipeline:
         if len(self.positions) == 0:
             raise ValueError("No positions to stack on: no peaks found above the threshold.")
         self.psi = psi
+        self.weights = weights
 
         patches = stacking.iter_patches(self.normalized,self.positions,psi=self.psi,size_deg=size_deg,
                                         size_deg_y=size_deg_y,reso_arcmin=reso_arcmin)
@@ -154,7 +171,8 @@ class StackingPipeline:
             patches = list(patches)
         self.patches = patches if keep_patches else None
 
-        self.stacked, self.counts = stacking.stack_patches(patches, min_count=min_count, return_counts=True)
+        self.stacked, self.counts = stacking.stack_patches(patches, min_count=min_count, return_counts=True,
+                                                           weights=self.weights)
 
         if profile:
             self.radius, self.profile = stacking.radial_profile(self.stacked,reso_arcmin=reso_arcmin)
