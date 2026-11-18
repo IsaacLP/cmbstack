@@ -24,6 +24,13 @@ The tutorials below are worked examples. The notebooks and the files required to
 Changelog
 ---------
 
+Unreleased
+~~~~~~~~~~
+
+**New features**
+
+- Weighted stacking: ``stack_patches`` takes ``weights``, one per patch, and returns the weighted mean at each pixel over the patches with a valid value there. ``StackingPipeline.run`` passes ``weights`` (one per position, requires ``positions``) and stores them in ``pipeline.weights``.
+
 v0.2.0
 ~~~~~~
 
