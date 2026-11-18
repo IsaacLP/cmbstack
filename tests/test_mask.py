@@ -174,5 +174,32 @@ def test_run_keep_patches_false():
     assert np.allclose(kept.profile, streamed.profile, equal_nan=True)
 
 
+def test_run_weights():
+    '''Test if run(weights=...) gives the weighted stack, and rejects bad weights'''
+    m_masked, positions, kwargs = _masked_patch_args()
+    weights = np.random.default_rng(2).uniform(0.1, 2.0, len(positions))
+    kwargs = dict(kwargs, profile=False)
+
+    pipe = StackingPipeline.from_map(m_masked).run(positions=positions, weights=weights, **kwargs)
+    expected, counts = stack_patches(pipe.patches, weights=weights, return_counts=True)
+    assert np.allclose(pipe.stacked, expected, equal_nan=True)
+    assert np.array_equal(pipe.counts, counts)
+    assert np.array_equal(pipe.weights, weights)
+
+    # Streaming gives the same stack, and equal weights give the unweighted stack.
+    streamed = StackingPipeline.from_map(m_masked).run(positions=positions, weights=weights,
+                                                       keep_patches=False, **kwargs)
+    assert np.allclose(streamed.stacked, expected, equal_nan=True)
+    plain = StackingPipeline.from_map(m_masked).run(positions=positions, **kwargs)
+    equal = StackingPipeline.from_map(m_masked).run(positions=positions, weights=np.full(len(positions), 3.0), **kwargs)
+    assert np.allclose(plain.stacked, equal.stacked, equal_nan=True)
+
+    # Wrong length, or weights without positions, fail before stacking.
+    with pytest.raises(ValueError):
+        StackingPipeline.from_map(m_masked).run(positions=positions, weights=weights[:-1], **kwargs)
+    with pytest.raises(ValueError):
+        StackingPipeline.from_map(m_masked).run(weights=weights, threshold=2.0, size_deg=10.0, reso_arcmin=30.0)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
